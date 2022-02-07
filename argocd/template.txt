@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: b2cdpingestion-backend
+  name: b2repo
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: b2cdpingestion-backend
+      app: b2repo
   template:
     metadata:
       labels:
-        app: b2cdpingestion-backend
+        app: b2repo
     spec:
       containers:
       - image: gcr.io/bambooboxmvp0dot1/%%version%%
-        name: b2cdpingestion-backend
+        name: b2repo
