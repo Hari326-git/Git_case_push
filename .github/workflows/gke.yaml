@@ -3,7 +3,7 @@ name: b2repo
 on:
   push:
     branches:
-      - main
+      - release0221
 jobs:
     build:
         name: CI/CD
@@ -58,10 +58,10 @@ jobs:
         - name: Push Docker image
           run: docker push gcr.io/${{ secrets.GCP_PROJECT_NAME }}/${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }} --all-tags
           
-        - name: Checkout main
+        - name: Checkout release0221
           uses: actions/checkout@v2
           with:
-            ref: main
+            ref: release0221
             clean: false
 
         - name: Update Version in argoCD 
