@@ -1,0 +1,84 @@
+name: b2cdpingestion-backend
+
+on:
+  push:
+    branches:
+      - developer
+jobs:
+    build:
+        name: CI/CD
+        runs-on: ubuntu-latest
+        steps:
+        - name: Extract branch name
+          shell: bash
+          run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          id: extract_branch
+        - name: Login to Container Registry
+          uses: google-github-actions/setup-gcloud@master 
+          with:
+            project_id: ${{ secrets.GCP_PROJECT_ID }}
+            service_account_email: ${{ secrets.GCP_EMAIL }}
+            service_account_key: ${{ secrets.GCP_CREDENTIALS }}
+
+        - name: Configure Docker
+          run: gcloud auth configure-docker --quiet
+
+        - name: Checkout repository
+          uses: actions/checkout@v2
+          with:
+            ref: '${{ github.ref }}'
+
+        - name: Build Docker image
+          run: docker build --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} -t ${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }} .
+
+        - name: Automated Version Bump
+          uses: phips28/gh-action-bump-version@master
+          env:
+            GITHUB_TOKEN: ${{ secrets.NPM_TOKEN }}
+          with:
+            minor-wording:  'MINOR'
+            major-wording:  'MAJOR'
+            patch-wording:  'patch,fixes'
+            tag-prefix:  '${{ steps.extract_branch.outputs.branch }}'
+
+
+        - name: Get current package version
+          uses: martinbeentjes/npm-get-version-action@v1.1.0
+          id: package-version
+
+        - name: Show version
+          run: echo "Version is ${{ steps.package-version.outputs.current-version}};"
+
+        - name: Add version tag
+          run: docker tag ${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }} gcr.io/${{ secrets.GCP_PROJECT_NAME }}/${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }}:${{ steps.package-version.outputs.current-version}}
+
+        - name: Add latest tag
+          run: docker tag ${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }} gcr.io/${{ secrets.GCP_PROJECT_NAME }}/${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }}:latest
+
+        - name: Push Docker image
+          run: docker push gcr.io/${{ secrets.GCP_PROJECT_NAME }}/${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }} --all-tags
+          
+        - name: Checkout main
+          uses: actions/checkout@v2
+          with:
+            ref: main
+            clean: false
+
+        - name: Update Version in argoCD 
+          uses: bluwy/substitute-string-action@v1
+          id: sub
+          with:
+            _input-file: ./argocd/template.txt
+            _output-file: ./argocd/deployment.yaml
+            _format-key: '%%key%%'
+            version: ${{ secrets.IMAGE_NAME }}-${{ steps.extract_branch.outputs.branch }}:${{ steps.package-version.outputs.current-version}}
+
+        - name: Echo output
+          run: |
+            echo "`cat ./argocd/deployment.yaml`"
+        - name: Push changes in deployment.yaml
+          run: |
+            rm .git/COMMIT_EDITMSG
+            git add argocd/deployment.yaml
+            git commit -m "ArgoCD ${{ steps.package-version.outputs.current-version}}"
+            git push
