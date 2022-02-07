@@ -3,7 +3,7 @@ name: b2repo
 on:
   push:
     branches:
-      - developer
+      - main
 jobs:
     build:
         name: CI/CD
