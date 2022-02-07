@@ -1,4 +1,4 @@
-name: b2cdpingestion-backend
+name: b2repo
 
 on:
   push:
